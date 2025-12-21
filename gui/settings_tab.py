@@ -36,7 +36,7 @@ class SettingsTab:
             )
             
             self.source_file_var = tk.StringVar(
-                value=self.config_manager.get('source_text_file', '')
+                value=self.config.get('source_text_file', '')  # ✅ ПРАВИЛЬНО
             )
             
             source_entry = tk.Entry(
@@ -57,8 +57,8 @@ class SettingsTab:
                 )
                 if filepath:
                     self.source_file_var.set(filepath)
-                    self.config_manager.set('source_text_file', filepath)
-                    self.config_manager.save_config()
+                    self.config.set('source_text_file', filepath)
+                    self.config.save_config()
             
             tk.Button(
                 row1,
@@ -76,7 +76,7 @@ class SettingsTab:
             )
             
             self.chunk_size_var = tk.IntVar(
-                value=self.config_manager.get('chunk_size', 2000)
+                value=self.config.get('chunk_size', 2000)
             )
             
             chunk_spinbox = tk.Spinbox(
@@ -87,7 +87,7 @@ class SettingsTab:
                 textvariable=self.chunk_size_var,
                 font=('Arial', 9),
                 width=10,
-                command=lambda: self.config_manager.set('chunk_size', self.chunk_size_var.get())
+                command=lambda: self.config.set('chunk_size', self.chunk_size_var.get())
             )
             chunk_spinbox.pack(side='left', padx=(0, 5))
             
@@ -142,8 +142,8 @@ class SettingsTab:
                 
                 # Параметры разбивки
                 chunk_size = self.chunk_size_var.get()
-                tolerance = self.config_manager.get('chunk_tolerance', 0.10)
-                min_threshold = self.config_manager.get('chunk_min_threshold', 0.50)
+                tolerance = self.config.get('chunk_tolerance', 0.10)
+                min_threshold = self.config.get('chunk_min_threshold', 0.50)
                 
                 # Разбиваем текст
                 try:
@@ -165,7 +165,7 @@ class SettingsTab:
                     return
                 
                 # Проверяем папку chunks
-                chunks_folder = self.config_manager.get('chunks_folder', 'chunks')
+                chunks_folder = self.config.get('chunks_folder', 'chunks')
                 
                 if os.path.exists(chunks_folder) and os.listdir(chunks_folder):
                     # Папка не пустая, спрашиваем
@@ -337,6 +337,9 @@ class SettingsTab:
         ).grid(row=row, column=0, columnspan=2, sticky=tk.W, pady=10)
         row += 1
         
+        # ✂️ ДОБАВИТЬ РАЗБИВКУ ТЕКСТА
+        self._create_chunker_section(container)
+
         # Папка с чанками
         tk.Label(container, text="📁 Папка с чанками:", bg="#ffffff", fg="black", font=("Arial", 10, "bold")).grid(row=row, column=0, sticky=tk.W, pady=10)
         chunks_frame = tk.Frame(container, bg="#ffffff")
