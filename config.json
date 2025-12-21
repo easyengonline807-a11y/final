@@ -1,5 +1,5 @@
 {
-  "model": "meta-llama/llama-guard-4-12b",
+  "model": "openai/gpt-oss-120b",
   "temperature": 0.8,
   "chunks_folder": "C:/Users/pland/OneDrive/Рабочий стол/Новая папка/2 — копия/chunks",
   "prompts_folder": "C:/Users/pland/OneDrive/Рабочий стол/Новая папка/2 — копия/промпт",
@@ -9,8 +9,8 @@
   "save_raw_responses": false,
   "source_text_file": "",
   "chunk_size": 2000,
-  "chunk_tolerance": 0.10,
-  "chunk_min_threshold": 0.50,
+  "chunk_tolerance": 0.1,
+  "chunk_min_threshold": 0.5,
   "production_models": [
     "llama-3.1-8b-instant",
     "llama-3.3-70b-versatile",
