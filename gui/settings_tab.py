@@ -10,6 +10,227 @@ class SettingsTab:
         self.parent = parent
         self.config = config_manager
         self.create_tab()
+
+        def _create_chunker_section(self, parent):
+            """Создать секцию разбивки текста."""
+            import os
+            from tkinter import filedialog, messagebox
+            from logic.text_chunker import TextChunker
+            
+            # Frame для разбивки
+            chunker_frame = tk.LabelFrame(
+                parent, 
+                text="✂️ Разбивка текста на чанки",
+                font=('Arial', 9, 'bold'),
+                padx=10,
+                pady=10
+            )
+            chunker_frame.pack(fill='x', padx=10, pady=(0, 10))
+            
+            # Строка 1: Исходный файл
+            row1 = tk.Frame(chunker_frame)
+            row1.pack(fill='x', pady=(0, 5))
+            
+            tk.Label(row1, text="Исходный файл:", font=('Arial', 9)).pack(
+                side='left', padx=(0, 5)
+            )
+            
+            self.source_file_var = tk.StringVar(
+                value=self.config_manager.get('source_text_file', '')
+            )
+            
+            source_entry = tk.Entry(
+                row1, 
+                textvariable=self.source_file_var,
+                font=('Arial', 9),
+                width=40
+            )
+            source_entry.pack(side='left', fill='x', expand=True, padx=(0, 5))
+            
+            def select_source_file():
+                filepath = filedialog.askopenfilename(
+                    title="Выберите текстовый файл",
+                    filetypes=[
+                        ("Текстовые файлы", "*.txt"),
+                        ("Все файлы", "*.*")
+                    ]
+                )
+                if filepath:
+                    self.source_file_var.set(filepath)
+                    self.config_manager.set('source_text_file', filepath)
+                    self.config_manager.save_config()
+            
+            tk.Button(
+                row1,
+                text="📁",
+                command=select_source_file,
+                width=3
+            ).pack(side='left')
+            
+            # Строка 2: Размер чанка
+            row2 = tk.Frame(chunker_frame)
+            row2.pack(fill='x', pady=(0, 5))
+            
+            tk.Label(row2, text="Размер чанка:", font=('Arial', 9)).pack(
+                side='left', padx=(0, 5)
+            )
+            
+            self.chunk_size_var = tk.IntVar(
+                value=self.config_manager.get('chunk_size', 2000)
+            )
+            
+            chunk_spinbox = tk.Spinbox(
+                row2,
+                from_=500,
+                to=10000,
+                increment=100,
+                textvariable=self.chunk_size_var,
+                font=('Arial', 9),
+                width=10,
+                command=lambda: self.config_manager.set('chunk_size', self.chunk_size_var.get())
+            )
+            chunk_spinbox.pack(side='left', padx=(0, 5))
+            
+            tk.Label(row2, text="символов", font=('Arial', 9)).pack(
+                side='left', padx=(0, 10)
+            )
+            
+            tk.Label(
+                row2, 
+                text="(допуск ±10%, объединение < 50%)",
+                font=('Arial', 8),
+                fg='gray'
+            ).pack(side='left')
+            
+            # Строка 3: Кнопка разбивки
+            def split_text():
+                """Обработчик разбивки текста."""
+                source_file = self.source_file_var.get()
+                
+                # Валидация
+                if not source_file:
+                    messagebox.showwarning(
+                        "Внимание",
+                        "Выберите исходный текстовый файл!"
+                    )
+                    return
+                
+                if not os.path.exists(source_file):
+                    messagebox.showerror(
+                        "Ошибка",
+                        f"Файл не найден:\n{source_file}"
+                    )
+                    return
+                
+                # Читаем файл
+                try:
+                    with open(source_file, 'r', encoding='utf-8') as f:
+                        text = f.read()
+                except Exception as e:
+                    messagebox.showerror(
+                        "Ошибка чтения",
+                        f"Не удалось прочитать файл:\n{str(e)}"
+                    )
+                    return
+                
+                if not text.strip():
+                    messagebox.showwarning(
+                        "Внимание",
+                        "Файл пустой!"
+                    )
+                    return
+                
+                # Параметры разбивки
+                chunk_size = self.chunk_size_var.get()
+                tolerance = self.config_manager.get('chunk_tolerance', 0.10)
+                min_threshold = self.config_manager.get('chunk_min_threshold', 0.50)
+                
+                # Разбиваем текст
+                try:
+                    chunks, merged_count = TextChunker.split_text(
+                        text, chunk_size, tolerance, min_threshold
+                    )
+                except Exception as e:
+                    messagebox.showerror(
+                        "Ошибка разбивки",
+                        f"Не удалось разбить текст:\n{str(e)}"
+                    )
+                    return
+                
+                if not chunks:
+                    messagebox.showwarning(
+                        "Внимание",
+                        "Не удалось создать чанки!"
+                    )
+                    return
+                
+                # Проверяем папку chunks
+                chunks_folder = self.config_manager.get('chunks_folder', 'chunks')
+                
+                if os.path.exists(chunks_folder) and os.listdir(chunks_folder):
+                    # Папка не пустая, спрашиваем
+                    response = messagebox.askyesno(
+                        "Папка не пустая",
+                        f"В папке '{chunks_folder}' уже есть файлы.\n"
+                        "Удалить их перед созданием новых чанков?",
+                        icon='warning'
+                    )
+                    
+                    if response:
+                        # Удаляем старые файлы
+                        try:
+                            for filename in os.listdir(chunks_folder):
+                                filepath = os.path.join(chunks_folder, filename)
+                                if os.path.isfile(filepath):
+                                    os.remove(filepath)
+                        except Exception as e:
+                            messagebox.showerror(
+                                "Ошибка",
+                                f"Не удалось очистить папку:\n{str(e)}"
+                            )
+                            return
+                else:
+                    # Создаем папку если её нет
+                    os.makedirs(chunks_folder, exist_ok=True)
+                
+                # Сохраняем чанки
+                try:
+                    for i, chunk in enumerate(chunks, 1):
+                        filename = f"{i:02d}.txt"
+                        filepath = os.path.join(chunks_folder, filename)
+                        
+                        with open(filepath, 'w', encoding='utf-8') as f:
+                            f.write(chunk)
+                except Exception as e:
+                    messagebox.showerror(
+                        "Ошибка сохранения",
+                        f"Не удалось сохранить чанки:\n{str(e)}"
+                    )
+                    return
+                
+                # Успех!
+                merge_info = f" (объединено {merged_count})" if merged_count > 0 else ""
+                messagebox.showinfo(
+                    "Успех",
+                    f"✅ Создано {len(chunks)} чанков{merge_info}\n"
+                    f"Папка: {chunks_folder}"
+                )
+                
+                # Обновляем статистику если есть
+                if hasattr(self, 'update_file_stats'):
+                    self.update_file_stats()
+            
+            split_btn = tk.Button(
+                chunker_frame,
+                text="✂️ Разбить на чанки",
+                command=split_text,
+                font=('Arial', 10, 'bold'),
+                bg='#2196F3',
+                fg='white',
+                cursor='hand2'
+            )
+            split_btn.pack(fill='x', pady=(5, 0))
+
     
     def load_models_from_config(self):
         """📌 НОВОЕ: Загрузить список моделей из config.json"""

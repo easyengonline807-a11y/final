@@ -4,10 +4,32 @@ import os
 class ConfigManager:
     """Управление настройками программы (config.json)"""
     
-    def __init__(self, config_file="config.json"):
-        self.config_file = config_file
-        self.config = self.load_config()
+    def __init__(self, config_path: str = "config.json"):
+        """Инициализация менеджера конфигурации."""
+        self.config_path = config_path
+        self.config = self._load_config()
+        
+        # Проверка наличия новых параметров и добавление значений по умолчанию
+        self._ensure_chunker_settings()
     
+    def _ensure_chunker_settings(self):
+        """Добавить настройки разбивки текста, если их нет."""
+        defaults = {
+            'source_text_file': '',
+            'chunk_size': 2000,
+            'chunk_tolerance': 0.10,
+            'chunk_min_threshold': 0.50
+        }
+        
+        updated = False
+        for key, value in defaults.items():
+            if key not in self.config:
+                self.config[key] = value
+                updated = True
+        
+        if updated:
+            self.save_config()
+            
     def load_config(self):
         """Загрузка конфигурации из файла"""
         default_config = {
