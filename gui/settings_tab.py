@@ -1,7 +1,10 @@
 import tkinter as tk
-from tkinter import ttk, scrolledtext, filedialog
+from tkinter import ttk, scrolledtext, filedialog, messagebox
 import json
+import os
 from pathlib import Path
+from logic.text_chunker import TextChunker
+
 
 class SettingsTab:
     """Вкладка настроек"""
@@ -10,227 +13,224 @@ class SettingsTab:
         self.parent = parent
         self.config = config_manager
         self.create_tab()
-
-        def _create_chunker_section(self, parent):
-            """Создать секцию разбивки текста."""
-            import os
-            from tkinter import filedialog, messagebox
-            from logic.text_chunker import TextChunker
-            
-            # Frame для разбивки
-            chunker_frame = tk.LabelFrame(
-                parent, 
-                text="✂️ Разбивка текста на чанки",
-                font=('Arial', 9, 'bold'),
-                padx=10,
-                pady=10
+    
+    def _create_chunker_section(self, parent):
+        """Создать секцию разбивки текста."""
+        # Frame для разбивки
+        chunker_frame = tk.LabelFrame(
+            parent, 
+            text="✂️ Разбивка текста на чанки",
+            font=('Arial', 9, 'bold'),
+            padx=10,
+            pady=10,
+            bg="#ffffff"
+        )
+        chunker_frame.pack(fill='x', padx=10, pady=(0, 10))
+        
+        # Строка 1: Исходный файл
+        row1 = tk.Frame(chunker_frame, bg="#ffffff")
+        row1.pack(fill='x', pady=(0, 5))
+        
+        tk.Label(row1, text="Исходный файл:", font=('Arial', 9), bg="#ffffff").pack(
+            side='left', padx=(0, 5)
+        )
+        
+        self.source_file_var = tk.StringVar(
+            value=self.config.get('source_text_file', '')
+        )
+        
+        source_entry = tk.Entry(
+            row1, 
+            textvariable=self.source_file_var,
+            font=('Arial', 9),
+            width=40,
+            bg="white",
+            fg="black"
+        )
+        source_entry.pack(side='left', fill='x', expand=True, padx=(0, 5))
+        
+        def select_source_file():
+            filepath = filedialog.askopenfilename(
+                title="Выберите текстовый файл",
+                filetypes=[
+                    ("Текстовые файлы", "*.txt"),
+                    ("Все файлы", "*.*")
+                ]
             )
-            chunker_frame.pack(fill='x', padx=10, pady=(0, 10))
+            if filepath:
+                self.source_file_var.set(filepath)
+                self.config.set('source_text_file', filepath)
+                self.config.save_config()
+        
+        tk.Button(
+            row1,
+            text="📁",
+            command=select_source_file,
+            width=3,
+            bg="#e0e0e0",
+            cursor="hand2"
+        ).pack(side='left')
+        
+        # Строка 2: Размер чанка
+        row2 = tk.Frame(chunker_frame, bg="#ffffff")
+        row2.pack(fill='x', pady=(0, 5))
+        
+        tk.Label(row2, text="Размер чанка:", font=('Arial', 9), bg="#ffffff").pack(
+            side='left', padx=(0, 5)
+        )
+        
+        self.chunk_size_var = tk.IntVar(
+            value=self.config.get('chunk_size', 2000)
+        )
+        
+        chunk_spinbox = tk.Spinbox(
+            row2,
+            from_=500,
+            to=10000,
+            increment=100,
+            textvariable=self.chunk_size_var,
+            font=('Arial', 9),
+            width=10,
+            command=lambda: self.config.set('chunk_size', self.chunk_size_var.get())
+        )
+        chunk_spinbox.pack(side='left', padx=(0, 5))
+        
+        tk.Label(row2, text="символов", font=('Arial', 9), bg="#ffffff").pack(
+            side='left', padx=(0, 10)
+        )
+        
+        tk.Label(
+            row2, 
+            text="(допуск ±10%, объединение < 50%)",
+            font=('Arial', 8),
+            fg='gray',
+            bg="#ffffff"
+        ).pack(side='left')
+        
+        # Строка 3: Кнопка разбивки
+        def split_text():
+            """Обработчик разбивки текста."""
+            source_file = self.source_file_var.get()
             
-            # Строка 1: Исходный файл
-            row1 = tk.Frame(chunker_frame)
-            row1.pack(fill='x', pady=(0, 5))
-            
-            tk.Label(row1, text="Исходный файл:", font=('Arial', 9)).pack(
-                side='left', padx=(0, 5)
-            )
-            
-            self.source_file_var = tk.StringVar(
-                value=self.config.get('source_text_file', '')  # ✅ ПРАВИЛЬНО
-            )
-            
-            source_entry = tk.Entry(
-                row1, 
-                textvariable=self.source_file_var,
-                font=('Arial', 9),
-                width=40
-            )
-            source_entry.pack(side='left', fill='x', expand=True, padx=(0, 5))
-            
-            def select_source_file():
-                filepath = filedialog.askopenfilename(
-                    title="Выберите текстовый файл",
-                    filetypes=[
-                        ("Текстовые файлы", "*.txt"),
-                        ("Все файлы", "*.*")
-                    ]
+            # Валидация
+            if not source_file:
+                messagebox.showwarning(
+                    "Внимание",
+                    "Выберите исходный текстовый файл!"
                 )
-                if filepath:
-                    self.source_file_var.set(filepath)
-                    self.config.set('source_text_file', filepath)
-                    self.config.save_config()
+                return
             
-            tk.Button(
-                row1,
-                text="📁",
-                command=select_source_file,
-                width=3
-            ).pack(side='left')
+            if not os.path.exists(source_file):
+                messagebox.showerror(
+                    "Ошибка",
+                    f"Файл не найден:\n{source_file}"
+                )
+                return
             
-            # Строка 2: Размер чанка
-            row2 = tk.Frame(chunker_frame)
-            row2.pack(fill='x', pady=(0, 5))
+            # Читаем файл
+            try:
+                with open(source_file, 'r', encoding='utf-8') as f:
+                    text = f.read()
+            except Exception as e:
+                messagebox.showerror(
+                    "Ошибка чтения",
+                    f"Не удалось прочитать файл:\n{str(e)}"
+                )
+                return
             
-            tk.Label(row2, text="Размер чанка:", font=('Arial', 9)).pack(
-                side='left', padx=(0, 5)
-            )
+            if not text.strip():
+                messagebox.showwarning(
+                    "Внимание",
+                    "Файл пустой!"
+                )
+                return
             
-            self.chunk_size_var = tk.IntVar(
-                value=self.config.get('chunk_size', 2000)
-            )
+            # Параметры разбивки
+            chunk_size = self.chunk_size_var.get()
+            tolerance = self.config.get('chunk_tolerance', 0.10)
+            min_threshold = self.config.get('chunk_min_threshold', 0.50)
             
-            chunk_spinbox = tk.Spinbox(
-                row2,
-                from_=500,
-                to=10000,
-                increment=100,
-                textvariable=self.chunk_size_var,
-                font=('Arial', 9),
-                width=10,
-                command=lambda: self.config.set('chunk_size', self.chunk_size_var.get())
-            )
-            chunk_spinbox.pack(side='left', padx=(0, 5))
+            # Разбиваем текст
+            try:
+                chunks, merged_count = TextChunker.split_text(
+                    text, chunk_size, tolerance, min_threshold
+                )
+            except Exception as e:
+                messagebox.showerror(
+                    "Ошибка разбивки",
+                    f"Не удалось разбить текст:\n{str(e)}"
+                )
+                return
             
-            tk.Label(row2, text="символов", font=('Arial', 9)).pack(
-                side='left', padx=(0, 10)
-            )
+            if not chunks:
+                messagebox.showwarning(
+                    "Внимание",
+                    "Не удалось создать чанки!"
+                )
+                return
             
-            tk.Label(
-                row2, 
-                text="(допуск ±10%, объединение < 50%)",
-                font=('Arial', 8),
-                fg='gray'
-            ).pack(side='left')
+            # Проверяем папку chunks
+            chunks_folder = self.config.get('chunks_folder', 'chunks')
             
-            # Строка 3: Кнопка разбивки
-            def split_text():
-                """Обработчик разбивки текста."""
-                source_file = self.source_file_var.get()
+            if os.path.exists(chunks_folder) and os.listdir(chunks_folder):
+                # Папка не пустая, спрашиваем
+                response = messagebox.askyesno(
+                    "Папка не пустая",
+                    f"В папке '{chunks_folder}' уже есть файлы.\n"
+                    "Удалить их перед созданием новых чанков?",
+                    icon='warning'
+                )
                 
-                # Валидация
-                if not source_file:
-                    messagebox.showwarning(
-                        "Внимание",
-                        "Выберите исходный текстовый файл!"
-                    )
-                    return
-                
-                if not os.path.exists(source_file):
-                    messagebox.showerror(
-                        "Ошибка",
-                        f"Файл не найден:\n{source_file}"
-                    )
-                    return
-                
-                # Читаем файл
-                try:
-                    with open(source_file, 'r', encoding='utf-8') as f:
-                        text = f.read()
-                except Exception as e:
-                    messagebox.showerror(
-                        "Ошибка чтения",
-                        f"Не удалось прочитать файл:\n{str(e)}"
-                    )
-                    return
-                
-                if not text.strip():
-                    messagebox.showwarning(
-                        "Внимание",
-                        "Файл пустой!"
-                    )
-                    return
-                
-                # Параметры разбивки
-                chunk_size = self.chunk_size_var.get()
-                tolerance = self.config.get('chunk_tolerance', 0.10)
-                min_threshold = self.config.get('chunk_min_threshold', 0.50)
-                
-                # Разбиваем текст
-                try:
-                    chunks, merged_count = TextChunker.split_text(
-                        text, chunk_size, tolerance, min_threshold
-                    )
-                except Exception as e:
-                    messagebox.showerror(
-                        "Ошибка разбивки",
-                        f"Не удалось разбить текст:\n{str(e)}"
-                    )
-                    return
-                
-                if not chunks:
-                    messagebox.showwarning(
-                        "Внимание",
-                        "Не удалось создать чанки!"
-                    )
-                    return
-                
-                # Проверяем папку chunks
-                chunks_folder = self.config.get('chunks_folder', 'chunks')
-                
-                if os.path.exists(chunks_folder) and os.listdir(chunks_folder):
-                    # Папка не пустая, спрашиваем
-                    response = messagebox.askyesno(
-                        "Папка не пустая",
-                        f"В папке '{chunks_folder}' уже есть файлы.\n"
-                        "Удалить их перед созданием новых чанков?",
-                        icon='warning'
-                    )
+                if response:
+                    # Удаляем старые файлы
+                    try:
+                        for filename in os.listdir(chunks_folder):
+                            filepath = os.path.join(chunks_folder, filename)
+                            if os.path.isfile(filepath):
+                                os.remove(filepath)
+                    except Exception as e:
+                        messagebox.showerror(
+                            "Ошибка",
+                            f"Не удалось очистить папку:\n{str(e)}"
+                        )
+                        return
+            else:
+                # Создаем папку если её нет
+                os.makedirs(chunks_folder, exist_ok=True)
+            
+            # Сохраняем чанки
+            try:
+                for i, chunk in enumerate(chunks, 1):
+                    filename = f"{i:02d}.txt"
+                    filepath = os.path.join(chunks_folder, filename)
                     
-                    if response:
-                        # Удаляем старые файлы
-                        try:
-                            for filename in os.listdir(chunks_folder):
-                                filepath = os.path.join(chunks_folder, filename)
-                                if os.path.isfile(filepath):
-                                    os.remove(filepath)
-                        except Exception as e:
-                            messagebox.showerror(
-                                "Ошибка",
-                                f"Не удалось очистить папку:\n{str(e)}"
-                            )
-                            return
-                else:
-                    # Создаем папку если её нет
-                    os.makedirs(chunks_folder, exist_ok=True)
-                
-                # Сохраняем чанки
-                try:
-                    for i, chunk in enumerate(chunks, 1):
-                        filename = f"{i:02d}.txt"
-                        filepath = os.path.join(chunks_folder, filename)
-                        
-                        with open(filepath, 'w', encoding='utf-8') as f:
-                            f.write(chunk)
-                except Exception as e:
-                    messagebox.showerror(
-                        "Ошибка сохранения",
-                        f"Не удалось сохранить чанки:\n{str(e)}"
-                    )
-                    return
-                
-                # Успех!
-                merge_info = f" (объединено {merged_count})" if merged_count > 0 else ""
-                messagebox.showinfo(
-                    "Успех",
-                    f"✅ Создано {len(chunks)} чанков{merge_info}\n"
-                    f"Папка: {chunks_folder}"
+                    with open(filepath, 'w', encoding='utf-8') as f:
+                        f.write(chunk)
+            except Exception as e:
+                messagebox.showerror(
+                    "Ошибка сохранения",
+                    f"Не удалось сохранить чанки:\n{str(e)}"
                 )
-                
-                # Обновляем статистику если есть
-                if hasattr(self, 'update_file_stats'):
-                    self.update_file_stats()
+                return
             
-            split_btn = tk.Button(
-                chunker_frame,
-                text="✂️ Разбить на чанки",
-                command=split_text,
-                font=('Arial', 10, 'bold'),
-                bg='#2196F3',
-                fg='white',
-                cursor='hand2'
+            # Успех!
+            merge_info = f" (объединено {merged_count})" if merged_count > 0 else ""
+            messagebox.showinfo(
+                "Успех",
+                f"✅ Создано {len(chunks)} чанков{merge_info}\n"
+                f"Папка: {chunks_folder}"
             )
-            split_btn.pack(fill='x', pady=(5, 0))
-
+        
+        split_btn = tk.Button(
+            chunker_frame,
+            text="✂️ Разбить на чанки",
+            command=split_text,
+            font=('Arial', 10, 'bold'),
+            bg='#2196F3',
+            fg='white',
+            cursor='hand2'
+        )
+        split_btn.pack(fill='x', pady=(5, 0))
     
     def load_models_from_config(self):
         """📌 НОВОЕ: Загрузить список моделей из config.json"""
@@ -262,39 +262,38 @@ class SettingsTab:
         container = tk.Frame(self.parent, bg="#ffffff")
         container.pack(fill=tk.BOTH, expand=True, padx=20, pady=10)
         
+        # ✂️ ДОБАВЛЯЕМ РАЗБИВКУ ТЕКСТА В НАЧАЛЕ
+        self._create_chunker_section(container)
+        
         row = 0
         
         # Модель
-        tk.Label(container, text="🤖 Модель:", bg="#ffffff", fg="black", font=("Arial", 10, "bold")).grid(row=row, column=0, sticky=tk.W, pady=10)
+        tk.Label(container, text="🤖 Модель:", bg="#ffffff", fg="black", 
+                font=("Arial", 10, "bold")).grid(row=row, column=0, sticky=tk.W, pady=10)
+        
         self.model_var = tk.StringVar(value=self.config.get("model", "llama-3.3-70b-versatile"))
-        model_combo = ttk.Combobox(container, textvariable=self.model_var, width=40, state="readonly")
+        model_combo = ttk.Combobox(container, textvariable=self.model_var, 
+                                   width=40, state="readonly")
         
         # ✅ ИСПРАВЛЕНО: Загружаем модели из config.json вместо hardcode
         available_models = self.load_models_from_config()
         model_combo['values'] = available_models
-        
         model_combo.grid(row=row, column=1, sticky=tk.W, pady=10)
         model_combo.bind("<<ComboboxSelected>>", lambda e: self.on_setting_change())
         row += 1
         
         # Температура
-        tk.Label(container, text="🌡️ Температура:", bg="#ffffff", fg="black", font=("Arial", 10, "bold")).grid(row=row, column=0, sticky=tk.W, pady=10)
+        tk.Label(container, text="🌡️ Температура:", bg="#ffffff", fg="black",
+                font=("Arial", 10, "bold")).grid(row=row, column=0, sticky=tk.W, pady=10)
+        
         self.temp_var = tk.DoubleVar(value=self.config.get("temperature", 0.7))
         temp_frame = tk.Frame(container, bg="#ffffff")
         temp_frame.grid(row=row, column=1, sticky=tk.W, pady=10)
         
         tk.Scale(
-            temp_frame, 
-            from_=0.0, 
-            to=2.0, 
-            resolution=0.1, 
-            orient=tk.HORIZONTAL, 
-            variable=self.temp_var, 
-            length=300,
-            bg="#ffffff",
-            fg="black",
-            troughcolor="#e0e0e0",
-            highlightthickness=0,
+            temp_frame, from_=0.0, to=2.0, resolution=0.1, orient=tk.HORIZONTAL,
+            variable=self.temp_var, length=300, bg="#ffffff", fg="black",
+            troughcolor="#e0e0e0", highlightthickness=0,
             command=lambda e: self.on_setting_change()
         ).pack(side=tk.LEFT)
         
@@ -303,24 +302,35 @@ class SettingsTab:
         
         def update_temp_label(*args):
             temp_label.config(text=f"{self.temp_var.get():.2f}")
+        
         self.temp_var.trace_add('write', update_temp_label)
         update_temp_label()
         row += 1
         
         # Количество промптов
-        tk.Label(container, text="📊 Количество промптов:", bg="#ffffff", fg="black", font=("Arial", 10, "bold")).grid(row=row, column=0, sticky=tk.W, pady=10)
+        tk.Label(container, text="📊 Количество промптов:", bg="#ffffff", fg="black",
+                font=("Arial", 10, "bold")).grid(row=row, column=0, sticky=tk.W, pady=10)
+        
         self.prompts_count_var = tk.IntVar(value=self.config.get("prompts_count", 5))
-        ttk.Spinbox(container, from_=1, to=10, textvariable=self.prompts_count_var, width=10, command=self.on_setting_change).grid(row=row, column=1, sticky=tk.W, pady=10)
+        ttk.Spinbox(container, from_=1, to=10, textvariable=self.prompts_count_var,
+                   width=10, command=self.on_setting_change).grid(row=row, column=1, 
+                                                                   sticky=tk.W, pady=10)
         row += 1
         
         # Задержка
-        tk.Label(container, text="⏱️ Задержка между файлами:", bg="#ffffff", fg="black", font=("Arial", 10, "bold")).grid(row=row, column=0, sticky=tk.W, pady=10)
+        tk.Label(container, text="⏱️ Задержка между файлами:", bg="#ffffff", fg="black",
+                font=("Arial", 10, "bold")).grid(row=row, column=0, sticky=tk.W, pady=10)
+        
         delay_frame = tk.Frame(container, bg="#ffffff")
         delay_frame.grid(row=row, column=1, sticky=tk.W, pady=10)
+        
         self.delay_var = tk.IntVar(value=self.config.get("delay", 1))
-        ttk.Spinbox(delay_frame, from_=0, to=60, textvariable=self.delay_var, width=10, command=self.on_setting_change).pack(side=tk.LEFT)
+        ttk.Spinbox(delay_frame, from_=0, to=60, textvariable=self.delay_var,
+                   width=10, command=self.on_setting_change).pack(side=tk.LEFT)
+        
         tk.Label(delay_frame, text=" сек", bg="#ffffff", fg="black").pack(side=tk.LEFT)
-        tk.Label(delay_frame, text="(Авто 0 если ключей > 5)", bg="#ffffff", fg="gray", font=("Arial", 8)).pack(side=tk.LEFT, padx=5)
+        tk.Label(delay_frame, text="(Авто 0 если ключей > 5)", bg="#ffffff",
+                fg="gray", font=("Arial", 8)).pack(side=tk.LEFT, padx=5)
         row += 1
         
         # Сохранять сырые ответы
@@ -329,50 +339,60 @@ class SettingsTab:
             container,
             text="☑️ Сохранять сырые ответы API (для отладки)",
             variable=self.save_raw_var,
-            bg="#ffffff",
-            fg="black",
-            selectcolor="#e0e0e0",
+            bg="#ffffff", fg="black", selectcolor="#e0e0e0",
             font=("Arial", 10),
             command=self.on_setting_change
         ).grid(row=row, column=0, columnspan=2, sticky=tk.W, pady=10)
         row += 1
         
-        # ✂️ ДОБАВИТЬ РАЗБИВКУ ТЕКСТА
-        self._create_chunker_section(container)
-
         # Папка с чанками
-        tk.Label(container, text="📁 Папка с чанками:", bg="#ffffff", fg="black", font=("Arial", 10, "bold")).grid(row=row, column=0, sticky=tk.W, pady=10)
+        tk.Label(container, text="📁 Папка с чанками:", bg="#ffffff", fg="black",
+                font=("Arial", 10, "bold")).grid(row=row, column=0, sticky=tk.W, pady=10)
+        
         chunks_frame = tk.Frame(container, bg="#ffffff")
         chunks_frame.grid(row=row, column=1, sticky=tk.W, pady=10)
+        
         self.chunks_folder_var = tk.StringVar(value=self.config.get("chunks_folder", ""))
-        tk.Entry(chunks_frame, textvariable=self.chunks_folder_var, width=35, bg="white", fg="black", insertbackground="black").pack(side=tk.LEFT)
-        tk.Button(chunks_frame, text="📂", command=lambda: self.select_folder("chunks_folder"), width=3, bg="#e0e0e0", fg="black", cursor="hand2").pack(side=tk.LEFT, padx=5)
+        tk.Entry(chunks_frame, textvariable=self.chunks_folder_var, width=35,
+                bg="white", fg="black", insertbackground="black").pack(side=tk.LEFT)
+        
+        tk.Button(chunks_frame, text="📂", 
+                 command=lambda: self.select_folder("chunks_folder"),
+                 width=3, bg="#e0e0e0", fg="black", 
+                 cursor="hand2").pack(side=tk.LEFT, padx=5)
         row += 1
         
         # Папка с промптами
-        tk.Label(container, text="💾 Папка с промптами:", bg="#ffffff", fg="black", font=("Arial", 10, "bold")).grid(row=row, column=0, sticky=tk.W, pady=10)
+        tk.Label(container, text="💾 Папка с промптами:", bg="#ffffff", fg="black",
+                font=("Arial", 10, "bold")).grid(row=row, column=0, sticky=tk.W, pady=10)
+        
         prompts_frame = tk.Frame(container, bg="#ffffff")
         prompts_frame.grid(row=row, column=1, sticky=tk.W, pady=10)
+        
         self.prompts_folder_var = tk.StringVar(value=self.config.get("prompts_folder", ""))
-        tk.Entry(prompts_frame, textvariable=self.prompts_folder_var, width=35, bg="white", fg="black", insertbackground="black").pack(side=tk.LEFT)
-        tk.Button(prompts_frame, text="📂", command=lambda: self.select_folder("prompts_folder"), width=3, bg="#e0e0e0", fg="black", cursor="hand2").pack(side=tk.LEFT, padx=5)
+        tk.Entry(prompts_frame, textvariable=self.prompts_folder_var, width=35,
+                bg="white", fg="black", insertbackground="black").pack(side=tk.LEFT)
+        
+        tk.Button(prompts_frame, text="📂",
+                 command=lambda: self.select_folder("prompts_folder"),
+                 width=3, bg="#e0e0e0", fg="black",
+                 cursor="hand2").pack(side=tk.LEFT, padx=5)
         row += 1
         
         # System prompt
-        tk.Label(container, text="📝 System Prompt:", bg="#ffffff", fg="black", font=("Arial", 10, "bold")).grid(row=row, column=0, sticky=tk.NW, pady=10)
+        tk.Label(container, text="📝 System Prompt:", bg="#ffffff", fg="black",
+                font=("Arial", 10, "bold")).grid(row=row, column=0, sticky=tk.NW, pady=10)
+        
         self.system_prompt_text = scrolledtext.ScrolledText(
-            container, 
-            width=50, 
-            height=8, 
+            container, width=50, height=8,
             font=("Consolas", 9),
-            bg="white",
-            fg="black",
+            bg="white", fg="black",
             insertbackground="black",
             wrap=tk.WORD
         )
         self.system_prompt_text.grid(row=row, column=1, sticky=tk.W, pady=10)
         
-        default_prompt = self.config.get("system_prompt", 
+        default_prompt = self.config.get("system_prompt",
             "Ты создаешь промпты для генерации исторических изображений. "
             "На основе предоставленного текста о военной истории создай {n} детальных описаний "
             "ключевых сцен для генератора изображений. "
