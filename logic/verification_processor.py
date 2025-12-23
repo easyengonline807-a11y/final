@@ -5,8 +5,6 @@
 import time
 from pathlib import Path
 from typing import Dict
-import groq
-
 
 class VerificationProcessor:
     """Обработчик проверки и улучшения промптов через AI."""
