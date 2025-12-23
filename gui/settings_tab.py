@@ -406,6 +406,28 @@ class SettingsTab:
         
         self.system_prompt_text.insert(1.0, default_prompt)
         self.system_prompt_text.bind("<KeyRelease>", lambda e: self.on_setting_change())
+
+        row += 1
+        
+        # ✅ НОВОЕ: Verification Prompt
+        tk.Label(container, text="🔍 Промпт проверки:", bg="#ffffff", fg="#0066cc", font=("Arial", 10, "bold")).grid(row=row, column=0, sticky=tk.NW, pady=10)
+        
+        self.verification_prompt_text = scrolledtext.ScrolledText(
+            container,
+            width=50,
+            height=8,
+            font=("Consolas", 9),
+            bg="#fff8dc",  # Светло-желтый фон для отличия
+            fg="black",
+            insertbackground="black",
+            wrap=tk.WORD
+        )
+        self.verification_prompt_text.grid(row=row, column=1, sticky=tk.W, pady=10)
+        
+        default_verification = self.config.get("verification_prompt", "")
+        self.verification_prompt_text.insert(1.0, default_verification)
+        self.verification_prompt_text.bind("<<Modified>>", lambda e: self.on_setting_change())
+        
     
     def select_folder(self, field_name):
         """Выбор папки"""
@@ -427,4 +449,5 @@ class SettingsTab:
         self.config.config["prompts_count"] = self.prompts_count_var.get()
         self.config.config["delay"] = self.delay_var.get()
         self.config.config["save_raw_responses"] = self.save_raw_var.get()
+        self.config.config["verification_prompt"] = self.verification_prompt_text.get(1.0, tk.END).strip()
         self.config.save_config()

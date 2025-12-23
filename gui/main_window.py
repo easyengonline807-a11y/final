@@ -1,6 +1,7 @@
 import tkinter as tk
 from tkinter import ttk, messagebox
 import threading
+from logic.verification_processor import VerificationProcessor
 import time
 import winsound
 from pathlib import Path
@@ -30,6 +31,9 @@ class MainWindow:
         self.processing_times = []
         self.overwrite_all = None
         
+        # ✅ НОВОЕ: Процессор проверки промптов
+        self.verifier = VerificationProcessor(self.api, self.logger)
+
         self.setup_window()
         self.create_gui()
     
@@ -178,6 +182,54 @@ class MainWindow:
             font=("Arial", 11, "bold"), bg="#8800cc", fg="white",
             width=18, height=1, cursor="hand2", relief=tk.RAISED, bd=3
         ).pack(side=tk.LEFT, padx=5)
+
+        # ✅ НОВОЕ: Ряд 3 - Этапы обработки
+        row3 = tk.Frame(button_frame, bg="#f0f0f0")
+        row3.pack(fill=tk.X, pady=2)
+        
+        tk.Button(
+            row3,
+            text="1️⃣ Разбить на чанки",
+            command=self.run_stage_1,
+            font=("Arial", 11, "bold"),
+            bg="#4CAF50",
+            fg="white",
+            width=18,
+            height=1,
+            cursor="hand2",
+            relief=tk.RAISED,
+            bd=3
+        ).pack(side=tk.LEFT, padx=5)
+        
+        tk.Button(
+            row3,
+            text="2️⃣ Создать промпты",
+            command=self.run_stage_2,
+            font=("Arial", 11, "bold"),
+            bg="#2196F3",
+            fg="white",
+            width=18,
+            height=1,
+            cursor="hand2",
+            relief=tk.RAISED,
+            bd=3
+        ).pack(side=tk.LEFT, padx=5)
+        
+        self.verify_stage_button = tk.Button(
+            row3,
+            text="3️⃣ Проверить промпты",
+            command=self.run_stage_3,
+            font=("Arial", 11, "bold"),
+            bg="#FF9800",
+            fg="white",
+            width=18,
+            height=1,
+            cursor="hand2",
+            relief=tk.RAISED,
+            bd=3
+        )
+        self.verify_stage_button.pack(side=tk.LEFT, padx=5)
+
 
         # ✅ НОВАЯ КНОПКА: Очистить кэш
         tk.Button(
@@ -511,3 +563,86 @@ class MainWindow:
                                 f"Попробуйте очистить вручную через PowerShell:\n"
                                 f"Get-ChildItem -Path . -Directory -Filter __pycache__ -Recurse | "
                                 f"Remove-Item -Recurse -Force")
+
+    def run_stage_1(self):
+        """Этап 1: Разбить текст на чанки"""
+        # Переключаемся на вкладку настроек
+        self.notebook.select(0)
+        self.logger.log("ℹ️ Используйте кнопку '✂️ Разбить на чанки' на вкладке Настройки", "info")
+        messagebox.showinfo(
+            "Этап 1",
+            "Перейдите на вкладку 'Настройки'\n"
+            "и нажмите кнопку '✂️ Разбить на чанки'"
+        )
+    
+    def run_stage_2(self):
+        """Этап 2: Создать промпты"""
+        # Это текущий функционал кнопки СТАРТ
+        self.start_processing()
+    
+    def run_stage_3(self):
+        """Этап 3: Проверить промпты через AI"""
+        # Проверка verification_prompt
+        verification_prompt = self.settings_tab.verification_prompt_text.get(1.0, tk.END).strip()
+        
+        if not verification_prompt or len(verification_prompt) < 20:
+            messagebox.showwarning(
+                "Внимание",
+                "Введите промпт для проверки на вкладке 'Настройки'\n"
+                "в поле '🔍 Промпт проверки'"
+            )
+            self.notebook.select(0)  # Переключить на настройки
+            return
+        
+        # Проверка наличия файлов
+        prompts_folder = Path(self.settings_tab.prompts_folder_var.get())
+        if not prompts_folder.exists() or not list(prompts_folder.glob('*.txt')):
+            messagebox.showwarning(
+                "Внимание",
+                "Сначала создайте промпты (Этап 2)"
+            )
+            return
+        
+        # Запуск проверки
+        self.logger.log("🔍 Запуск проверки промптов...", "info")
+        self.verify_stage_button.config(state=tk.DISABLED)
+        
+        def verify_thread():
+            try:
+                stats = self.verifier.verify_prompts_folder(
+                    prompts_folder=prompts_folder,
+                    verification_prompt=verification_prompt,
+                    progress_callback=self._update_verify_progress
+                )
+                
+                # Показать результат
+                self.root.after(0, lambda: self._show_verify_complete(stats))
+                
+            except Exception as e:
+                self.logger.log(f"❌ Ошибка: {e}", "error")
+                self.root.after(0, lambda: messagebox.showerror("Ошибка", str(e)))
+            finally:
+                self.root.after(0, lambda: self.verify_stage_button.config(state=tk.NORMAL))
+        
+        threading.Thread(target=verify_thread, daemon=True).start()
+    
+    def _update_verify_progress(self, current, total, filename):
+        """Обновить прогресс проверки"""
+        status = f"🔍 Проверяется {current}/{total}: {filename}"
+        self.progress_label.config(text=status)
+    
+    def _show_verify_complete(self, stats):
+        """Показать результат проверки"""
+        improved_pct = (stats['improved'] / stats['total'] * 100) if stats['total'] > 0 else 0
+        unchanged_pct = (stats['unchanged'] / stats['total'] * 100) if stats['total'] > 0 else 0
+        
+        message = f"""✅ Проверка завершена!
+
+📊 Статистика:
+• Обработано файлов: {stats['total']}
+• Улучшено: {stats['improved']} ({improved_pct:.1f}%)
+• Без изменений: {stats['unchanged']} ({unchanged_pct:.1f}%)
+• Ошибок: {stats['errors']}"""
+        
+        self.progress_label.config(text="✅ Проверка завершена")
+        messagebox.showinfo("Результаты проверки", message)
