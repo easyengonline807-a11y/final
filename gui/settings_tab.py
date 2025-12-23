@@ -417,7 +417,7 @@ class SettingsTab:
             width=50,
             height=8,
             font=("Consolas", 9),
-            bg="#fff8dc",  # Светло-желтый фон для отличия
+            bg="#fff8dc",
             fg="black",
             insertbackground="black",
             wrap=tk.WORD
@@ -427,7 +427,7 @@ class SettingsTab:
         default_verification = self.config.get("verification_prompt", "")
         self.verification_prompt_text.insert(1.0, default_verification)
         self.verification_prompt_text.bind("<<Modified>>", lambda e: self.on_setting_change())
-        
+
     
     def select_folder(self, field_name):
         """Выбор папки"""
