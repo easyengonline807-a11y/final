@@ -14,21 +14,23 @@ class SettingsTab:
         self.config = config_manager
         self.create_tab()
     
-    def _create_chunker_section(self, parent):
+    def _create_chunker_section(self, parent, row):
         """Создать секцию разбивки текста."""
-        # Frame для разбивки
-        chunker_frame = tk.LabelFrame(
+        # ГЛАВНЫЙ FRAME - через grid
+        main_frame = tk.LabelFrame(
             parent, 
             text="✂️ Разбивка текста на чанки",
             font=('Arial', 9, 'bold'),
-            padx=10,
-            pady=10,
             bg="#ffffff"
         )
-        chunker_frame.pack(fill='x', padx=10, pady=(0, 10))
+        main_frame.grid(row=row, column=0, columnspan=2, sticky=tk.W+tk.E, pady=10, padx=0)
+        
+        # Внутри используем pack
+        inner_container = tk.Frame(main_frame, bg="#ffffff")
+        inner_container.pack(fill='both', expand=True, padx=10, pady=10)
         
         # Строка 1: Исходный файл
-        row1 = tk.Frame(chunker_frame, bg="#ffffff")
+        row1 = tk.Frame(inner_container, bg="#ffffff")
         row1.pack(fill='x', pady=(0, 5))
         
         tk.Label(row1, text="Исходный файл:", font=('Arial', 9), bg="#ffffff").pack(
@@ -72,7 +74,7 @@ class SettingsTab:
         ).pack(side='left')
         
         # Строка 2: Размер чанка
-        row2 = tk.Frame(chunker_frame, bg="#ffffff")
+        row2 = tk.Frame(inner_container, bg="#ffffff")
         row2.pack(fill='x', pady=(0, 5))
         
         tk.Label(row2, text="Размер чанка:", font=('Arial', 9), bg="#ffffff").pack(
@@ -222,7 +224,7 @@ class SettingsTab:
             )
         
         split_btn = tk.Button(
-            chunker_frame,
+            inner_container,
             text="✂️ Разбить на чанки",
             command=split_text,
             font=('Arial', 10, 'bold'),
@@ -231,6 +233,8 @@ class SettingsTab:
             cursor='hand2'
         )
         split_btn.pack(fill='x', pady=(5, 0))
+        
+        return 1  # Возвращаем количество использованных строк в grid
     
     def load_models_from_config(self):
         """📌 НОВОЕ: Загрузить список моделей из config.json"""
@@ -262,10 +266,10 @@ class SettingsTab:
         container = tk.Frame(self.parent, bg="#ffffff")
         container.pack(fill=tk.BOTH, expand=True, padx=20, pady=10)
         
-        # ✂️ ДОБАВЛЯЕМ РАЗБИВКУ ТЕКСТА В НАЧАЛЕ
-        self._create_chunker_section(container)
-        
         row = 0
+        
+        # ✂️ ДОБАВЛЯЕМ РАЗБИВКУ ТЕКСТА В НАЧАЛЕ
+        row += self._create_chunker_section(container, row)
         
         # Модель
         tk.Label(container, text="🤖 Модель:", bg="#ffffff", fg="black", 
